@@ -1,8 +1,8 @@
 <template>
-    <div>
+    <div class="game-container" :style="'width:' + stageWidth.toString() + 'px;margin-left:-' + (stageWidth / 2).toString() + 'px;'">
         <div class='three-container' :id="containerID"></div>
-        <div class="tracker" v-on:click="clicked" v-on:mousedown="down"></div>
-        <div v-if="pedalDown" v-on:mouseup="up" v-on:mousemove="move" class="cover"></div>
+        <div class="tracker" v-on:click="clicked" v-on:mousedown="down" v-on:touchstart="down"></div>
+        <div v-if="pedalDown" v-on:mouseup="up" v-on:touchend="up" v-on:mousemove="move"  v-on:touchmove="move" class="cover"></div>
     </div>
 </template>
 <script>
@@ -28,16 +28,31 @@ export default {
             segmentAdvance: 10,
             pedalDown: false,
             segmentsPlaced: [],
-            segmentGroups: {}
+            segmentGroups: {},
+            sphereMat: {},
+            stationaryMat: [],
+            stageWidth: 500
         }
     },
     methods: {
         clicked: function () {
             // this.$data.shapeMaker.getShapes()[0].body.velocity.set(0,0,-20);
         },
-        move: function (e) {
+        processEvent: function (e) {
+            let event;
+            if (e.touches != undefined) {
+                e.preventDefault();
+                event = e.touches[0];
+            } else {
+                event = e;
+            }
+            return event;
+        },
+        move: function (_e) {
+            let e = this.processEvent(_e);
+            let wide = e.target.getBoundingClientRect().width;
             let mousePos = {x: e.pageX, y: e.pageY};
-            let pos = {x: mousePos.x - 250, y: mousePos.y - 100};
+            let pos = {x: mousePos.x - (wide / 2), y: mousePos.y - 100};
             this.$data.easePosition._x = pos.x;
             this.$data.easePosition._y = pos.y;
             
@@ -48,10 +63,11 @@ export default {
         down: function () {
             this.$data.pedalDown = true;
         },
-        addMirrorBlock: function (position, size) {
+        addMirrorBlock: function (position, size, mass) {
             let self = this;
-            let shape = self.$data.mirrorMaker.createShape(self.$data.mirrorMaker.getShapeTypes().Cube, position,[size.width,size.height,size.depth],0);
-            self.$data.mirrorStats.push({dist: jstrig.distance({x: 0, y: 0}, {x: position.x, y: position.y}), angle: jstrig.angle({x: 0, y: 0}, {x: position.x, y: position.y})});
+            let _mass = mass == undefined ? 0 : mass;
+            let shape = self.$data.mirrorMaker.createShape(self.$data.mirrorMaker.getShapeTypes().Cube, position,[size.width,size.height,size.depth],_mass,self.$data.stationaryMat);
+            self.$data.mirrorStats.push({mass: mass, dist: jstrig.distance({x: 0, y: 0}, {x: position.x, y: position.y}), angle: jstrig.angle({x: 0, y: 0}, {x: position.x, y: position.y})});
             return shape;
         },
         addTrackSegment: function (zSlot, leftBorder, rightBorder) {
@@ -73,7 +89,8 @@ export default {
                                 width: predefinedShapes[i].size.width*self.$data.segmentSize.x,
                                 height: predefinedShapes[i].size.height*self.$data.segmentSize.y,
                                 depth: predefinedShapes[i].size.depth*self.$data.segmentSize.z
-                            }));
+                            },
+                            predefinedShapes[i].mass));
                     }
                     
                 }
@@ -170,10 +187,41 @@ export default {
         self.$data.mirrorMaker.setScene(self.$data.scene);
         self.$data.mirrorMaker.setWorld(world);
 
-        self.$data.shapeMaker.createShape(self.$data.shapeMaker.getShapeTypes().Sphere, {x:0,y:1,z:-2},[.5],5);
-        self.$data.shapeMaker.createShape(self.$data.shapeMaker.getShapeTypes().Cube, {x:.2,y:2,z:-1.7},[.4,.4,.4],5);
+        // self.updateCamera(camera)
+        // var light0 = new self.$data.THREE.AmbientLight(0x202020);
+        // self.$data.shapeMaker.getScene().add(light0);
+        // var light1 = new self.$data.THREE.PointLight(0xffffff, 5);
+        // light1.position.set(-12, 15, 10);
+        // self.$data.shapeMaker.getScene().add(light1);
+        // var light2 = new self.$data.THREE.DirectionalLight(0xffffff, 3);
+        // light2.position.set(0, 100, 10);
+        // self.$data.shapeMaker.getScene().add(light2);
+        // var light1helper = new self.$data.THREE.PointLightHelper(light1, 2);
+        // self.$data.shapeMaker.getScene().add(light1helper);
+        // var light2helper = new self.$data.THREE.DirectionalLightHelper(light2, 1);
+        // self.$data.shapeMaker.getScene().add(light2helper);
 
-        for(var i = 0; i < self.$data.segmentAdvance; i++){
+        self.$data.sphereMat = new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true});
+        self.$data.sphereMat.map = new self.$data.THREE.TextureLoader().load('gridImage.png');
+        self.$data.stationaryMat = [
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true}),
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true}),
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true}),
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true}),
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true}),
+            new self.$data.THREE.MeshBasicMaterial({side: self.$data.THREE.DoubleSide, transparent: true})
+        ];
+        let i = 0;
+        for(i = 0; i < self.$data.stationaryMat.length; i++){
+            let squareIndex = Math.floor(i / 2);
+            self.$data.stationaryMat[i].map = new self.$data.THREE.TextureLoader().load('square' + (6 - (squareIndex + 1)).toString() + '.png');
+        }
+        // self.$data.stationaryMat.map = new self.$data.THREE.TextureLoader().load('square.png');
+
+        self.$data.shapeMaker.createShape(self.$data.shapeMaker.getShapeTypes().Sphere, {x:0,y:1,z:-2},[.5],5,self.$data.sphereMat);
+        self.$data.shapeMaker.createShape(self.$data.shapeMaker.getShapeTypes().Cube, {x:.2,y:2,z:-1.7},[.4,.4,.4],5, self.$data.stationaryMat);
+
+        for(i = 0; i < self.$data.segmentAdvance; i++){
             self.addTrackSegment(i, Math.random() > .5, Math.random() > .5);
         }
 
@@ -213,16 +261,16 @@ export default {
 
                 }
                 self.$data.mirrorMaker.getShapes()[i].update();
-                
             }
             self.$data.camera.position.z = self.$data.shapeMaker.getShapes()[0].mesh.position.z + 4;
+            self.$data.camera.position.x = self.$data.shapeMaker.getShapes()[0].mesh.position.x;
             let currentSegmentPosition = (Math.floor(self.$data.camera.position.z / self.$data.segmentSize.z) * -1) + self.$data.segmentAdvance;
             let removalSegmentPosition = (Math.floor(self.$data.camera.position.z / self.$data.segmentSize.z) * -1) - self.$data.segmentAdvance;
             // console.log(Math.floor(self.$data.camera.position.z / 4));
             self.addTrackSegment(currentSegmentPosition, Math.random() > .5, Math.random() > .5);
             self.removeTrackSegment(removalSegmentPosition);
             self.$data.renderer.render(self.$data.scene, self.$data.camera);
-            console.log(self.$data.segmentGroups);
+            // console.log(self.$data.segmentGroups);
             // self.$data.easePosition._x += self.$data.easePosition.x > 0 ? Math.random() * -0.01 : Math.random() * 0.01;
             
             
@@ -233,14 +281,22 @@ export default {
 }
 </script>
 <style>
+    html, body{
+        overflow: hidden;
+    }
+    div.game-container{
+        position:absolute;
+        left:50%;
+    }
     div.three-container{
-        width:500px;
+        width:100%;
         height:500px;
+        background-color:#000000;
     }
     div.tracker{
-        width:500px;
+        width:100%;
         height: 200px;
-        background-color: #cc0000;;
+        background-color: #00cc00;;
     }
     div.cover{
         position: fixed;
